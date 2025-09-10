@@ -20,15 +20,14 @@ A sleek, dark-themed score tracking website for Raehan, Omar, and Mahir's Wordle
 2. [Vercel account](https://vercel.com/) (free)
 3. [GitHub account](https://github.com/) (free)
 
-### Step 1: Setup Turso Database
+### Step 1: Setup Vercel Blob Storage
 
-1. **Install Turso CLI:** `curl -sSfL https://get.tur.so/install.sh | bash`
-2. **Authenticate:** `turso auth signup`
-3. **Create database:** `turso db create wordle-squad`
-4. **Create token:** `turso db tokens create wordle-squad`
-5. **Get URL:** `turso db show wordle-squad --url`
+1. In your **Vercel Dashboard**, go to your project
+2. Click **"Storage"** tab → **"Create Database"** → **"Blob"**
+3. Name it `wordle-blob` and click **"Create"**
+4. Done! Vercel automatically connects it.
 
-See `TURSO_SETUP.md` for detailed instructions.
+See `BLOB_SETUP.md` for more details.
 
 ### Step 2: Deploy to Vercel
 

@@ -1,43 +1,37 @@
-const { createClient } = require("@libsql/client");
+const { put, head } = require("@vercel/blob");
 
-// Initialize Turso client
-let client = null;
+const BLOB_FILE = "wordle-scores.json";
 
-function getClient() {
-  if (!client) {
-    client = createClient({
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    });
-  }
-  return client;
-}
+// Default scores data
+const defaultData = {
+  scores: { raehan: 0, omar: 0, mahir: 0 },
+  lastUpdated: new Date().toISOString()
+};
 
-// Initialize database table
-async function initializeDatabase() {
-  const db = getClient();
-  
+// Get scores from blob storage
+async function getScoresFromBlob() {
   try {
-    // Create table if it doesn't exist
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS wordle_scores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        player TEXT UNIQUE NOT NULL,
-        score INTEGER DEFAULT 0,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Insert default players if they don't exist
-    const players = ['raehan', 'omar', 'mahir'];
-    for (const player of players) {
-      await db.execute({
-        sql: `INSERT OR IGNORE INTO wordle_scores (player, score) VALUES (?, 0)`,
-        args: [player]
-      });
+    const response = await fetch(`https://${process.env.BLOB_READ_WRITE_TOKEN?.split('_')[1]}.blob.vercel-storage.com/${BLOB_FILE}`);
+    if (response.ok) {
+      return await response.json();
     }
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.log("No existing scores found, using defaults");
+  }
+  return defaultData;
+}
+
+// Save scores to blob storage
+async function saveScoresToBlob(data) {
+  try {
+    const blob = await put(BLOB_FILE, JSON.stringify(data), {
+      access: 'public',
+      addRandomSuffix: false
+    });
+    return blob;
+  } catch (error) {
+    console.error("Error saving to blob:", error);
+    throw error;
   }
 }
 
@@ -51,38 +45,21 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Initialize database on first request
-  await initializeDatabase();
-
   if (req.method === "GET") {
     try {
-      const db = getClient();
+      const data = await getScoresFromBlob();
       
-      // Get all scores
-      const result = await db.execute(`SELECT player, score, last_updated FROM wordle_scores ORDER BY player`);
-      
-      // Format scores object
-      const scores = {};
-      let lastUpdated = new Date().toISOString();
-      
-      result.rows.forEach(row => {
-        scores[row.player] = row.score;
-        if (row.last_updated > lastUpdated) {
-          lastUpdated = row.last_updated;
-        }
-      });
-
       return res.status(200).json({
         success: true,
-        scores,
-        lastUpdated,
-        debug: "Data loaded from Turso SQLite database"
+        scores: data.scores,
+        lastUpdated: data.lastUpdated,
+        debug: "Data loaded from Vercel Blob storage"
       });
     } catch (error) {
       console.error("Error fetching scores:", error);
       return res.status(500).json({
         success: false,
-        error: "Failed to fetch scores from database",
+        error: "Failed to fetch scores from blob storage",
         debug: error.message
       });
     }
@@ -109,35 +86,28 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const db = getClient();
-
-      // Get current score
-      const currentResult = await db.execute({
-        sql: `SELECT score FROM wordle_scores WHERE player = ?`,
-        args: [player]
-      });
-
-      const currentScore = currentResult.rows[0]?.score || 0;
+      // Get current data
+      const currentData = await getScoresFromBlob();
+      const currentScore = currentData.scores[player] || 0;
       const newScore = Math.max(0, currentScore + change);
 
-      // Update score in database
-      await db.execute({
-        sql: `UPDATE wordle_scores SET score = ?, last_updated = CURRENT_TIMESTAMP WHERE player = ?`,
-        args: [newScore, player]
-      });
+      // Update the score
+      const updatedData = {
+        scores: {
+          ...currentData.scores,
+          [player]: newScore
+        },
+        lastUpdated: new Date().toISOString()
+      };
 
-      // Get all updated scores
-      const allScoresResult = await db.execute(`SELECT player, score FROM wordle_scores ORDER BY player`);
-      const updatedScores = {};
-      allScoresResult.rows.forEach(row => {
-        updatedScores[row.player] = row.score;
-      });
+      // Save to blob storage
+      await saveScoresToBlob(updatedData);
 
       return res.status(200).json({
         success: true,
         message: `${player}'s score updated from ${currentScore} to ${newScore}`,
-        scores: updatedScores,
-        lastUpdated: new Date().toISOString(),
+        scores: updatedData.scores,
+        lastUpdated: updatedData.lastUpdated,
       });
     } catch (error) {
       console.error("Error updating score:", error);
