@@ -23,7 +23,6 @@ let scores = {
   mahir: 0,
 };
 
-let isUnlocked = false;
 let isUpdating = false; // Prevent concurrent updates
 let autoRefreshInterval;
 
@@ -31,15 +30,6 @@ let autoRefreshInterval;
 document.addEventListener("DOMContentLoaded", function () {
   loadScores();
   displayRandomFunFact();
-
-  // Add enter key support for password
-  document
-    .getElementById("admin-password")
-    .addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
-        unlockControls();
-      }
-    });
 });
 
 // Load scores from API
@@ -112,11 +102,6 @@ function saveScoresToLocalStorage() {
 
 // Update a player's score
 async function updateScore(player, change) {
-  if (!isUnlocked) {
-    showModal("🔒 Access Denied", "Please unlock the admin panel first!");
-    return;
-  }
-
   // Prevent concurrent updates
   if (isUpdating) {
     showModal("⏳ Please Wait", "Another update is in progress...");
@@ -144,7 +129,6 @@ async function updateScore(player, change) {
       body: JSON.stringify({
         player,
         change,
-        password: CONFIG.password,
       }),
     });
 
@@ -209,9 +193,6 @@ async function updateScore(player, change) {
       startAutoRefresh();
     }, 1000); // Wait 1 second before resuming auto-refresh
   }
-
-  // Auto-lock after 30 seconds of inactivity
-  resetAutoLockTimer();
 }
 
 // Update leaderboard
@@ -252,137 +233,7 @@ function updateLeaderboard() {
   leaderboardList.innerHTML = html;
 }
 
-// Toggle admin panel
-function toggleAdminPanel() {
-  const panel = document.getElementById("admin-panel");
-  panel.classList.toggle("hidden");
 
-  if (!panel.classList.contains("hidden")) {
-    document.getElementById("admin-password").focus();
-  }
-}
-
-// Unlock controls with password
-async function unlockControls() {
-  const passwordInput = document.getElementById("admin-password");
-  const enteredPassword = passwordInput.value;
-
-  if (!enteredPassword) {
-    showModal("❌ Password Required", "Please enter a password.");
-    return;
-  }
-
-  try {
-    showLoadingState(true);
-
-    const response = await fetch(`${CONFIG.apiUrl}/api/auth?t=${Date.now()}`, {
-      method: "POST",
-      cache: 'no-cache',
-      headers: {
-        "Content-Type": "application/json",
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      },
-      body: JSON.stringify({
-        password: enteredPassword,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      isUnlocked = true;
-
-      // Show all controls
-      document.querySelectorAll(".controls").forEach((control) => {
-        control.classList.add("unlocked");
-      });
-
-      // Hide admin panel
-      document.getElementById("admin-panel").classList.add("hidden");
-
-      // Clear password
-      passwordInput.value = "";
-
-      // Show success message
-      showModal(
-        "🔓 Unlocked!",
-        "You can now update scores. Controls will auto-lock after 2 minutes of inactivity."
-      );
-
-      // Auto-lock after 2 minutes
-      startAutoLockTimer();
-
-      // Visual feedback
-      document.body.style.background =
-        "linear-gradient(135deg, #10b981 0%, #059669 100%)";
-      setTimeout(() => {
-        document.body.style.background =
-          "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)";
-      }, 2000);
-    } else {
-      // Wrong password
-      passwordInput.style.borderColor = "#ef4444";
-      passwordInput.style.animation = "shake 0.5s ease-in-out";
-
-      setTimeout(() => {
-        passwordInput.style.borderColor = "#475569";
-        passwordInput.style.animation = "";
-      }, 500);
-
-      showModal(
-        "❌ Wrong Password",
-        data.error || "Please check your password and try again."
-      );
-    }
-  } catch (error) {
-    console.error("Network error:", error);
-
-    // Fallback to local password check
-    if (enteredPassword === CONFIG.password) {
-      isUnlocked = true;
-      document.querySelectorAll(".controls").forEach((control) => {
-        control.classList.add("unlocked");
-      });
-      document.getElementById("admin-panel").classList.add("hidden");
-      passwordInput.value = "";
-      showModal("🔓 Unlocked (Offline)", "Controls unlocked in offline mode.");
-      startAutoLockTimer();
-    } else {
-      showModal(
-        "❌ Wrong Password",
-        "Please check your password and try again."
-      );
-    }
-  } finally {
-    showLoadingState(false);
-  }
-}
-
-// Auto-lock functionality
-let autoLockTimer;
-
-function startAutoLockTimer() {
-  clearTimeout(autoLockTimer);
-  autoLockTimer = setTimeout(() => {
-    lockControls();
-    showModal("🔒 Auto-locked", "Controls have been locked due to inactivity.");
-  }, 120000); // 2 minutes
-}
-
-function resetAutoLockTimer() {
-  if (isUnlocked) {
-    startAutoLockTimer();
-  }
-}
-
-function lockControls() {
-  isUnlocked = false;
-  document.querySelectorAll(".controls").forEach((control) => {
-    control.classList.remove("unlocked");
-  });
-  clearTimeout(autoLockTimer);
-}
 
 // Modal functions
 function showModal(title, message) {
@@ -462,13 +313,6 @@ document.addEventListener("keydown", function (e) {
   // ESC to close modal
   if (e.key === "Escape") {
     closeModal();
-    document.getElementById("admin-panel").classList.add("hidden");
-  }
-
-  // Ctrl/Cmd + U to toggle admin panel
-  if ((e.ctrlKey || e.metaKey) && e.key === "u") {
-    e.preventDefault();
-    toggleAdminPanel();
   }
 });
 
@@ -499,6 +343,4 @@ function startAutoRefresh() {
 // Start auto-refresh initially
 startAutoRefresh();
 
-// Reset auto-lock timer on any user interaction
-document.addEventListener("click", resetAutoLockTimer);
-document.addEventListener("keypress", resetAutoLockTimer);
+

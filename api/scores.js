@@ -91,15 +91,7 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "POST") {
     try {
-      const { player, change, password } = req.body;
-
-      // Verify password
-      if (password !== "wordle123") {
-        return res.status(401).json({
-          success: false,
-          error: "Invalid password",
-        });
-      }
+      const { player, change } = req.body;
 
       // Validate player
       const validPlayers = ["raehan", "omar", "mahir"];
