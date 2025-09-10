@@ -210,11 +210,8 @@ async function updateScore(player, change) {
     isUpdating = false;
     console.log(`🔓 [UPDATE] isUpdating set to false`);
     
-    // Restart auto-refresh after a short delay
-    setTimeout(() => {
-      console.log(`▶️ [UPDATE] Restarting auto-refresh`);
-      startAutoRefresh();
-    }, 1000); // Wait 1 second before resuming auto-refresh
+    // Update activity timestamp - no need to restart auto-refresh
+    updateActivity();
   }
 }
 
@@ -353,19 +350,33 @@ document.head.appendChild(style);
 // Update fun fact every 30 seconds
 setInterval(displayRandomFunFact, 30000);
 
-// Auto-refresh management
+// Auto-refresh management - only when inactive
+let lastActivity = Date.now();
+
 function startAutoRefresh() {
   console.log("🔄 [REFRESH] Starting auto-refresh");
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
-    if (!isUpdating) { // Only refresh when not actively updating
-      console.log("🔄 [REFRESH] Auto-refresh triggered");
+    const timeSinceActivity = Date.now() - lastActivity;
+    if (!isUpdating && timeSinceActivity > 30000) { // Only refresh if inactive for 30 seconds
+      console.log("🔄 [REFRESH] Auto-refresh triggered (inactive for 30s)");
       loadScores();
-    } else {
+    } else if (isUpdating) {
       console.log("⏸️ [REFRESH] Skipping auto-refresh - update in progress");
+    } else {
+      console.log("⏸️ [REFRESH] Skipping auto-refresh - recent activity");
     }
-  }, 15000); // Reduced to 15 seconds for better sync
+  }, 60000); // Check every 60 seconds
 }
+
+// Track user activity
+function updateActivity() {
+  lastActivity = Date.now();
+  console.log("👆 [ACTIVITY] User activity detected");
+}
+
+// Add activity tracking to button clicks
+document.addEventListener('click', updateActivity);
 
 // Start auto-refresh initially
 startAutoRefresh();
