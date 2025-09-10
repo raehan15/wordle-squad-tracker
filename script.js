@@ -23,15 +23,17 @@ let scores = {
   mahir: 0,
 };
 
-let isUpdating = false; // Prevent concurrent updates
+// Fixed: Properly declare all variables
+let isUpdating = false;
+let lastUpdateTime = 0;
+let lastActivity = Date.now();
 let autoRefreshInterval;
-let updateQueue = []; // Queue for pending updates
-let lastUpdateTime = 0; // Track last update time for debouncing
 
 // Initialize the app
 document.addEventListener("DOMContentLoaded", function () {
   loadScores();
   displayRandomFunFact();
+  startAutoRefresh();
 });
 
 // Load scores from API
@@ -50,6 +52,11 @@ async function loadScores() {
         },
       }
     );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     console.log("📥 [LOAD] Server response:", data);
 
@@ -58,17 +65,14 @@ async function loadScores() {
         "📊 [LOAD] Before update - Current scores:",
         JSON.stringify(scores)
       );
-      scores = data.scores;
+      scores = { ...data.scores }; // Create new object to avoid reference issues
       console.log(
         "📊 [LOAD] After update - New scores:",
         JSON.stringify(scores)
       );
 
       // Update the display
-      CONFIG.players.forEach((player) => {
-        document.getElementById(`${player}-score`).textContent =
-          scores[player] || 0;
-      });
+      updateScoreDisplays();
 
       // Update last updated time
       if (data.lastUpdated) {
@@ -77,28 +81,37 @@ async function loadScores() {
 
       updateLeaderboard();
     } else {
-      console.error("Failed to load scores:", data.error);
-      showModal("❌ Error", "Failed to load scores. Using offline mode.");
-      loadScoresFromLocalStorage(); // Fallback to localStorage
+      throw new Error(data.error || "Failed to load scores");
     }
   } catch (error) {
-    console.error("Network error:", error);
+    console.error("❌ [LOAD] Error:", error);
     showModal("🔌 Offline Mode", "Cannot connect to server. Using local data.");
-    loadScoresFromLocalStorage(); // Fallback to localStorage
+    loadScoresFromLocalStorage();
   } finally {
     showLoadingState(false);
   }
+}
+
+// Update all score displays
+function updateScoreDisplays() {
+  CONFIG.players.forEach((player) => {
+    const element = document.getElementById(`${player}-score`);
+    if (element) {
+      element.textContent = scores[player] || 0;
+    }
+  });
 }
 
 // Fallback function for offline mode
 function loadScoresFromLocalStorage() {
   const savedScores = localStorage.getItem("wordleSquadScores");
   if (savedScores) {
-    scores = JSON.parse(savedScores);
-    CONFIG.players.forEach((player) => {
-      document.getElementById(`${player}-score`).textContent =
-        scores[player] || 0;
-    });
+    try {
+      scores = JSON.parse(savedScores);
+      updateScoreDisplays();
+    } catch (e) {
+      console.error("Error parsing saved scores:", e);
+    }
   }
 
   const lastUpdated = localStorage.getItem("wordleSquadLastUpdated");
@@ -111,179 +124,101 @@ function loadScoresFromLocalStorage() {
 
 // Save scores to localStorage (backup)
 function saveScoresToLocalStorage() {
-  localStorage.setItem("wordleSquadScores", JSON.stringify(scores));
-  localStorage.setItem("wordleSquadLastUpdated", new Date().toISOString());
+  try {
+    localStorage.setItem("wordleSquadScores", JSON.stringify(scores));
+    localStorage.setItem("wordleSquadLastUpdated", new Date().toISOString());
+  } catch (e) {
+    console.error("Error saving to localStorage:", e);
+  }
 }
 
-// Update a player's score
+// Simplified and fixed update function
 async function updateScore(player, change) {
   console.log(
     `🎯 [UPDATE] Starting update for ${player} with change ${change}`
   );
 
-  // Debounce rapid clicks (minimum 500ms between updates)
+  // Simple debouncing - prevent rapid clicks
   const now = Date.now();
   if (now - lastUpdateTime < 500) {
-    console.log("⚡ [UPDATE] Debouncing rapid click");
     showModal("⚡ Too Fast", "Please wait a moment between updates...");
     return;
   }
-  lastUpdateTime = now;
 
-  // Prevent concurrent updates - queue the request if one is in progress
+  // Prevent concurrent updates
   if (isUpdating) {
-    console.log("⏳ [UPDATE] Already updating, queueing request");
-    updateQueue.push({ player, change });
-    showModal("⏳ Please Wait", "Update queued. Processing...");
+    showModal("⏳ Please Wait", "Another update is in progress...");
     return;
   }
 
   isUpdating = true;
+  lastUpdateTime = now;
 
-  // Stop auto-refresh during update to prevent interference
+  // Stop auto-refresh during update
   clearInterval(autoRefreshInterval);
-  console.log("⏸️ [UPDATE] Auto-refresh stopped");
 
-  // Get fresh scores from server before updating to avoid stale local state
-  console.log("📥 [UPDATE] Getting fresh scores from server first...");
-  try {
-    const freshResponse = await fetch(
-      `${CONFIG.apiUrl}/api/scores?t=${Date.now()}`,
-      {
-        cache: "no-cache",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      }
-    );
-    const freshData = await freshResponse.json();
-    if (freshData.success) {
-      scores = freshData.scores; // Update local state with server state
-      console.log(
-        "📊 [UPDATE] Updated local scores with server state:",
-        JSON.stringify(scores)
-      );
-      // Update display with fresh scores before making changes
-      CONFIG.players.forEach((p) => {
-        document.getElementById(`${p}-score`).textContent = scores[p] || 0;
-      });
-    }
-  } catch (error) {
-    console.log("⚠️ [UPDATE] Could not get fresh scores, using local state");
-  }
+  const originalScore = scores[player] || 0;
+  const newScore = Math.max(0, originalScore + change);
 
-  const oldScore = scores[player] || 0;
-  const expectedNewScore = Math.max(0, oldScore + change);
   console.log(
-    `📊 [UPDATE] Player: ${player}, Old: ${oldScore}, Change: ${change}, Expected: ${expectedNewScore}`
-  );
-  console.log(
-    `📊 [UPDATE] Current scores before API call:`,
-    JSON.stringify(scores)
+    `📊 [UPDATE] Player: ${player}, Old: ${originalScore}, Change: ${change}, New: ${newScore}`
   );
 
   try {
     showLoadingState(true);
 
-    console.log(
-      `📤 [UPDATE] Sending API request to update ${player} by ${change}`
-    );
-    const response = await fetch(
-      `${CONFIG.apiUrl}/api/scores?t=${Date.now()}`,
-      {
-        method: "POST",
-        cache: "no-cache",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-        body: JSON.stringify({
-          player,
-          change,
-        }),
-      }
-    );
+    console.log("📤 [UPDATE] Sending API request...");
+    const response = await fetch(`${CONFIG.apiUrl}/api/scores`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+      },
+      body: JSON.stringify({ player, change }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
     const data = await response.json();
-    console.log(`📥 [UPDATE] API Response:`, data);
+    console.log("📥 [UPDATE] API Response:", data);
 
     if (data.success) {
-      console.log(
-        `📊 [UPDATE] Server returned scores:`,
-        JSON.stringify(data.scores)
-      );
-      console.log(
-        `📊 [UPDATE] Before applying server response - local scores:`,
-        JSON.stringify(scores)
-      );
+      // Update with server response to ensure consistency
+      scores = { ...data.scores };
+      updateScoreDisplays();
 
-      // Verify the update was applied correctly
-      const serverScore = data.scores[player];
-      if (serverScore !== expectedNewScore) {
-        console.warn(
-          `⚠️ [UPDATE] Score mismatch! Expected: ${expectedNewScore}, Got: ${serverScore}`
-        );
-        // Show warning to user about potential sync issue
-        showModal(
-          "⚠️ Sync Warning", 
-          `Score updated but there may be a sync issue. Expected: ${expectedNewScore}, Got: ${serverScore}`
-        );
+      // Add visual feedback
+      const scoreElement = document.getElementById(`${player}-score`);
+      if (scoreElement) {
+        scoreElement.classList.add("score-updated");
+        setTimeout(() => scoreElement.classList.remove("score-updated"), 600);
       }
 
-      // Update local scores with server response
-      scores = data.scores;
-      console.log(
-        `📊 [UPDATE] After applying server response - local scores:`,
-        JSON.stringify(scores)
-      );
-
-      // Update ALL player displays to ensure consistency
-      CONFIG.players.forEach((p) => {
-        const displayValue = scores[p] || 0;
-        document.getElementById(`${p}-score`).textContent = displayValue;
-        console.log(`🖥️ [UPDATE] Updated display for ${p}: ${displayValue}`);
-      });
-
-      // Add animation to the updated player
-      const scoreElement = document.getElementById(`${player}-score`);
-      scoreElement.classList.add("score-updated");
-
-      // Remove animation class after animation completes
-      setTimeout(() => {
-        scoreElement.classList.remove("score-updated");
-      }, 600);
-
-      // Update leaderboard
       updateLeaderboard();
 
-      // Update last updated time
-      updateLastUpdatedDisplay(data.lastUpdated);
+      if (data.lastUpdated) {
+        updateLastUpdatedDisplay(data.lastUpdated);
+      }
 
-      // Save to localStorage as backup
       saveScoresToLocalStorage();
 
-      // Show success message
       const action = change > 0 ? "increased" : "decreased";
       const playerName = player.charAt(0).toUpperCase() + player.slice(1);
       showModal(
-        "✨ Score Updated!",
-        data.message || `${playerName}'s score ${action}!`
+        "✅ Score Updated!",
+        `${playerName}'s score ${action} successfully!`
       );
     } else {
-      console.error(`❌ [UPDATE] Server returned error:`, data.error);
-      showModal("❌ Update Failed", data.error || "Failed to update score");
+      throw new Error(data.error || "Server returned error");
     }
   } catch (error) {
-    console.error(`🔌 [UPDATE] Network error:`, error);
+    console.error("❌ [UPDATE] Error:", error);
 
-    // Fallback to local update
-    scores[player] = Math.max(0, oldScore + change);
-    document.getElementById(`${player}-score`).textContent = scores[player];
-    console.log(
-      `🔌 [UPDATE] Fallback - updated ${player} locally to ${scores[player]}`
-    );
+    // Fallback to local update for offline functionality
+    scores[player] = newScore;
+    updateScoreDisplays();
     updateLeaderboard();
     saveScoresToLocalStorage();
 
@@ -292,34 +227,25 @@ async function updateScore(player, change) {
       "Score updated locally. Changes will sync when online."
     );
   } finally {
-    console.log(`🔚 [UPDATE] Finishing update process for ${player}`);
     showLoadingState(false);
     isUpdating = false;
-    console.log(`🔓 [UPDATE] isUpdating set to false`);
-
-    // Update activity timestamp and restart auto-refresh
     updateActivity();
-    startAutoRefresh();
-    console.log("🔄 [UPDATE] Auto-refresh restarted");
 
-    // Process any queued updates
-    if (updateQueue.length > 0) {
-      console.log(`📋 [UPDATE] Processing ${updateQueue.length} queued updates`);
-      const nextUpdate = updateQueue.shift();
-      setTimeout(() => updateScore(nextUpdate.player, nextUpdate.change), 100);
-    }
+    // Restart auto-refresh with small delay
+    setTimeout(() => startAutoRefresh(), 1000);
   }
 }
 
 // Update leaderboard
 function updateLeaderboard() {
   const leaderboardList = document.getElementById("leaderboard-list");
+  if (!leaderboardList) return;
 
   // Create array of players with scores and sort
   const playerData = CONFIG.players
     .map((player) => ({
       name: player.charAt(0).toUpperCase() + player.slice(1),
-      score: scores[player],
+      score: scores[player] || 0,
       player: player,
     }))
     .sort((a, b) => b.score - a.score);
@@ -338,12 +264,12 @@ function updateLeaderboard() {
         : `${index + 1}.`;
 
     html += `
-            <div class="leaderboard-item ${rankClass}">
-                <span class="leaderboard-rank">${rankEmoji}</span>
-                <span class="leaderboard-name">${player.name}</span>
-                <span class="leaderboard-score">${player.score}</span>
-            </div>
-        `;
+      <div class="leaderboard-item ${rankClass}">
+        <span class="leaderboard-rank">${rankEmoji}</span>
+        <span class="leaderboard-name">${player.name}</span>
+        <span class="leaderboard-score">${player.score}</span>
+      </div>
+    `;
   });
 
   leaderboardList.innerHTML = html;
@@ -351,19 +277,26 @@ function updateLeaderboard() {
 
 // Modal functions
 function showModal(title, message) {
-  document.getElementById("update-modal").querySelector("h3").textContent =
-    title;
-  document.getElementById("update-message").textContent = message;
-  document.getElementById("update-modal").classList.remove("hidden");
+  const modal = document.getElementById("update-modal");
+  const titleEl = modal?.querySelector("h3");
+  const messageEl = document.getElementById("update-message");
+
+  if (titleEl) titleEl.textContent = title;
+  if (messageEl) messageEl.textContent = message;
+  if (modal) modal.classList.remove("hidden");
 }
 
 function closeModal() {
-  document.getElementById("update-modal").classList.add("hidden");
+  const modal = document.getElementById("update-modal");
+  if (modal) modal.classList.add("hidden");
 }
 
 // Update last updated timestamp
 function updateLastUpdatedDisplay(timestamp) {
-  if (timestamp) {
+  const element = document.getElementById("last-updated");
+  if (!element || !timestamp) return;
+
+  try {
     const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
@@ -382,7 +315,9 @@ function updateLastUpdatedDisplay(timestamp) {
       timeAgo = `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
     }
 
-    document.getElementById("last-updated").textContent = timeAgo;
+    element.textContent = timeAgo;
+  } catch (e) {
+    console.error("Error updating timestamp:", e);
   }
 }
 
@@ -408,71 +343,61 @@ function showLoadingState(isLoading) {
 
 // Display random fun fact
 function displayRandomFunFact() {
-  const randomFact =
-    CONFIG.funFacts[Math.floor(Math.random() * CONFIG.funFacts.length)];
-  document.getElementById(
-    "fun-fact"
-  ).textContent = `💡 Fun fact: ${randomFact}`;
+  const factElement = document.getElementById("fun-fact");
+  if (factElement) {
+    const randomFact =
+      CONFIG.funFacts[Math.floor(Math.random() * CONFIG.funFacts.length)];
+    factElement.textContent = `💡 Fun fact: ${randomFact}`;
+  }
 }
 
 // Close modal when clicking outside
-document.getElementById("update-modal").addEventListener("click", function (e) {
-  if (e.target === this) {
-    closeModal();
-  }
-});
+const modal = document.getElementById("update-modal");
+if (modal) {
+  modal.addEventListener("click", function (e) {
+    if (e.target === this) {
+      closeModal();
+    }
+  });
+}
 
 // Keyboard shortcuts
 document.addEventListener("keydown", function (e) {
-  // ESC to close modal
   if (e.key === "Escape") {
     closeModal();
   }
 });
 
-// Add shake animation to CSS dynamically
+// Add CSS animation for score updates
 const style = document.createElement("style");
 style.textContent = `
-    @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
-        20%, 40%, 60%, 80% { transform: translateX(10px); }
-    }
+  @keyframes scoreUpdate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); background-color: #22c55e; }
+    100% { transform: scale(1); }
+  }
+  .score-updated {
+    animation: scoreUpdate 0.6s ease-in-out;
+  }
 `;
 document.head.appendChild(style);
 
 // Update fun fact every 30 seconds
 setInterval(displayRandomFunFact, 30000);
 
-// Auto-refresh management - only when inactive
-let lastActivity = Date.now();
-
+// Simplified auto-refresh management
 function startAutoRefresh() {
   console.log("🔄 [REFRESH] Starting auto-refresh");
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     const timeSinceActivity = Date.now() - lastActivity;
-    const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-    
-    // Only refresh if:
-    // 1. Not currently updating
-    // 2. Inactive for 30 seconds
-    // 3. At least 5 seconds since last update
-    // 4. No pending updates in queue
-    if (!isUpdating && 
-        timeSinceActivity > 30000 && 
-        timeSinceLastUpdate > 5000 && 
-        updateQueue.length === 0) {
-      console.log("🔄 [REFRESH] Auto-refresh triggered (safe conditions met)");
+
+    // Only refresh if not updating and inactive for 60 seconds
+    if (!isUpdating && timeSinceActivity > 60000) {
+      console.log("🔄 [REFRESH] Auto-refresh triggered");
       loadScores();
-    } else {
-      const reason = isUpdating ? "update in progress" :
-                   timeSinceActivity <= 30000 ? "recent activity" :
-                   timeSinceLastUpdate <= 5000 ? "recent update" :
-                   updateQueue.length > 0 ? "pending updates" : "unknown";
-      console.log(`⏸️ [REFRESH] Skipping auto-refresh - ${reason}`);
     }
-  }, 60000); // Check every 60 seconds
+  }, 30000); // Check every 30 seconds
 }
 
 // Track user activity
@@ -481,8 +406,9 @@ function updateActivity() {
   console.log("👆 [ACTIVITY] User activity detected");
 }
 
-// Add activity tracking to button clicks
+// Add activity tracking to user interactions
 document.addEventListener("click", updateActivity);
+document.addEventListener("keypress", updateActivity);
 
 // Start auto-refresh initially
 startAutoRefresh();
