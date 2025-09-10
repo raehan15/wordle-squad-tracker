@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Load scores from API
 async function loadScores() {
+  console.log("🔄 [LOAD] Starting loadScores...");
   try {
     showLoadingState(true);
 
@@ -45,9 +46,12 @@ async function loadScores() {
       }
     });
     const data = await response.json();
+    console.log("📥 [LOAD] Server response:", data);
 
     if (data.success) {
+      console.log("📊 [LOAD] Before update - Current scores:", JSON.stringify(scores));
       scores = data.scores;
+      console.log("📊 [LOAD] After update - New scores:", JSON.stringify(scores));
 
       // Update the display
       CONFIG.players.forEach((player) => {
@@ -102,22 +106,29 @@ function saveScoresToLocalStorage() {
 
 // Update a player's score
 async function updateScore(player, change) {
+  console.log(`🎯 [UPDATE] Starting update for ${player} with change ${change}`);
+  
   // Prevent concurrent updates
   if (isUpdating) {
+    console.log("⏳ [UPDATE] Already updating, blocking concurrent request");
     showModal("⏳ Please Wait", "Another update is in progress...");
     return;
   }
 
   isUpdating = true;
   const oldScore = scores[player] || 0;
-  console.log(`Starting update: ${player} from ${oldScore} with change ${change}`);
+  const expectedNewScore = Math.max(0, oldScore + change);
+  console.log(`📊 [UPDATE] Player: ${player}, Old: ${oldScore}, Change: ${change}, Expected: ${expectedNewScore}`);
+  console.log(`📊 [UPDATE] Current scores before API call:`, JSON.stringify(scores));
   
   // Stop auto-refresh during update
   clearInterval(autoRefreshInterval);
+  console.log("⏸️ [UPDATE] Auto-refresh stopped");
 
   try {
     showLoadingState(true);
 
+    console.log(`📤 [UPDATE] Sending API request to update ${player} by ${change}`);
     const response = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
       method: "POST",
       cache: 'no-cache',
@@ -133,14 +144,21 @@ async function updateScore(player, change) {
     });
 
     const data = await response.json();
+    console.log(`📥 [UPDATE] API Response:`, data);
 
     if (data.success) {
+      console.log(`📊 [UPDATE] Server returned scores:`, JSON.stringify(data.scores));
+      console.log(`📊 [UPDATE] Before applying server response - local scores:`, JSON.stringify(scores));
+      
       // Update local scores with server response
       scores = data.scores;
+      console.log(`📊 [UPDATE] After applying server response - local scores:`, JSON.stringify(scores));
 
       // Update ALL player displays to ensure consistency
       CONFIG.players.forEach((p) => {
-        document.getElementById(`${p}-score`).textContent = scores[p] || 0;
+        const displayValue = scores[p] || 0;
+        document.getElementById(`${p}-score`).textContent = displayValue;
+        console.log(`🖥️ [UPDATE] Updated display for ${p}: ${displayValue}`);
       });
 
       // Add animation to the updated player
@@ -169,14 +187,16 @@ async function updateScore(player, change) {
         data.message || `${playerName}'s score ${action}!`
       );
     } else {
+      console.error(`❌ [UPDATE] Server returned error:`, data.error);
       showModal("❌ Update Failed", data.error || "Failed to update score");
     }
   } catch (error) {
-    console.error("Network error:", error);
+    console.error(`🔌 [UPDATE] Network error:`, error);
 
     // Fallback to local update
     scores[player] = Math.max(0, oldScore + change);
     document.getElementById(`${player}-score`).textContent = scores[player];
+    console.log(`🔌 [UPDATE] Fallback - updated ${player} locally to ${scores[player]}`);
     updateLeaderboard();
     saveScoresToLocalStorage();
 
@@ -185,11 +205,14 @@ async function updateScore(player, change) {
       "Score updated locally. Changes will sync when online."
     );
   } finally {
+    console.log(`🔚 [UPDATE] Finishing update process for ${player}`);
     showLoadingState(false);
     isUpdating = false;
+    console.log(`🔓 [UPDATE] isUpdating set to false`);
     
     // Restart auto-refresh after a short delay
     setTimeout(() => {
+      console.log(`▶️ [UPDATE] Restarting auto-refresh`);
       startAutoRefresh();
     }, 1000); // Wait 1 second before resuming auto-refresh
   }
@@ -332,10 +355,14 @@ setInterval(displayRandomFunFact, 30000);
 
 // Auto-refresh management
 function startAutoRefresh() {
+  console.log("🔄 [REFRESH] Starting auto-refresh");
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     if (!isUpdating) { // Only refresh when not actively updating
+      console.log("🔄 [REFRESH] Auto-refresh triggered");
       loadScores();
+    } else {
+      console.log("⏸️ [REFRESH] Skipping auto-refresh - update in progress");
     }
   }, 15000); // Reduced to 15 seconds for better sync
 }
