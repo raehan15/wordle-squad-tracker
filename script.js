@@ -125,6 +125,7 @@ async function updateScore(player, change) {
 
   isUpdating = true;
   const oldScore = scores[player] || 0;
+  console.log(`Starting update: ${player} from ${oldScore} with change ${change}`);
   
   // Stop auto-refresh during update
   clearInterval(autoRefreshInterval);
@@ -153,9 +154,13 @@ async function updateScore(player, change) {
       // Update local scores with server response
       scores = data.scores;
 
-      // Update display with animation
+      // Update ALL player displays to ensure consistency
+      CONFIG.players.forEach((p) => {
+        document.getElementById(`${p}-score`).textContent = scores[p] || 0;
+      });
+
+      // Add animation to the updated player
       const scoreElement = document.getElementById(`${player}-score`);
-      scoreElement.textContent = scores[player];
       scoreElement.classList.add("score-updated");
 
       // Remove animation class after animation completes
@@ -171,6 +176,11 @@ async function updateScore(player, change) {
 
       // Save to localStorage as backup
       saveScoresToLocalStorage();
+
+      // Force a fresh load from server to double-check consistency
+      setTimeout(() => {
+        loadScores();
+      }, 500);
 
       // Show success message
       const action = change > 0 ? "increased" : "decreased";
@@ -199,10 +209,10 @@ async function updateScore(player, change) {
     showLoadingState(false);
     isUpdating = false;
     
-    // Restart auto-refresh after a delay
+    // Restart auto-refresh after a short delay
     setTimeout(() => {
       startAutoRefresh();
-    }, 5000); // Wait 5 seconds before resuming auto-refresh
+    }, 1000); // Wait 1 second before resuming auto-refresh
   }
 
   // Auto-lock after 30 seconds of inactivity
@@ -485,10 +495,10 @@ setInterval(displayRandomFunFact, 30000);
 function startAutoRefresh() {
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
-    if (!isUnlocked && !isUpdating) { // Only refresh when not actively editing or updating
+    if (!isUpdating) { // Only refresh when not actively updating
       loadScores();
     }
-  }, 30000);
+  }, 15000); // Reduced to 15 seconds for better sync
 }
 
 // Start auto-refresh initially
