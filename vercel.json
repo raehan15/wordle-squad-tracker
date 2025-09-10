@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/scores.js": {
+      "runtime": "nodejs18.x"
+    },
+    "api/auth.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    }
+  ]
+}

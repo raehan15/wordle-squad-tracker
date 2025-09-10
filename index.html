@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wordle Squad - Score Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1 class="title">🟨 Wordle Squad 🟩</h1>
+        <p class="subtitle">Tracking the battles of Raehan, Omar & Mahir</p>
+      </header>
+
+      <div class="stats-grid">
+        <div class="player-card" data-player="raehan">
+          <div class="player-avatar">R</div>
+          <h3 class="player-name">Raehan</h3>
+          <div class="score-display">
+            <span class="score-number" id="raehan-score">0</span>
+            <span class="score-label">wins</span>
+          </div>
+          <div class="controls">
+            <button
+              class="btn btn-increment"
+              onclick="updateScore('raehan', 1)"
+            >
+              +1
+            </button>
+            <button
+              class="btn btn-decrement"
+              onclick="updateScore('raehan', -1)"
+            >
+              -1
+            </button>
+          </div>
+        </div>
+
+        <div class="player-card" data-player="omar">
+          <div class="player-avatar">O</div>
+          <h3 class="player-name">Omar</h3>
+          <div class="score-display">
+            <span class="score-number" id="omar-score">0</span>
+            <span class="score-label">wins</span>
+          </div>
+          <div class="controls">
+            <button class="btn btn-increment" onclick="updateScore('omar', 1)">
+              +1
+            </button>
+            <button class="btn btn-decrement" onclick="updateScore('omar', -1)">
+              -1
+            </button>
+          </div>
+        </div>
+
+        <div class="player-card" data-player="mahir">
+          <div class="player-avatar">M</div>
+          <h3 class="player-name">Mahir</h3>
+          <div class="score-display">
+            <span class="score-number" id="mahir-score">0</span>
+            <span class="score-label">wins</span>
+          </div>
+          <div class="controls">
+            <button class="btn btn-increment" onclick="updateScore('mahir', 1)">
+              +1
+            </button>
+            <button
+              class="btn btn-decrement"
+              onclick="updateScore('mahir', -1)"
+            >
+              -1
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="leaderboard">
+        <h2>🏆 Leaderboard</h2>
+        <div id="leaderboard-list"></div>
+      </div>
+
+      <div class="admin-section">
+        <button class="btn btn-admin" onclick="toggleAdminPanel()">
+          ⚙️ Update Scores
+        </button>
+        <div id="admin-panel" class="admin-panel hidden">
+          <input
+            type="password"
+            id="admin-password"
+            placeholder="Enter password"
+            class="admin-input"
+          />
+          <button class="btn btn-unlock" onclick="unlockControls()">
+            Unlock
+          </button>
+          <p class="admin-hint">Password protected updates</p>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <p>Last updated: <span id="last-updated">Never</span></p>
+        <p class="fun-fact" id="fun-fact"></p>
+      </footer>
+    </div>
+
+    <!-- Modal for updates -->
+    <div id="update-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Score Updated! ✨</h3>
+        <p id="update-message"></p>
+        <button class="btn" onclick="closeModal()">Nice!</button>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
