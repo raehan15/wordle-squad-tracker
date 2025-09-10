@@ -1,4 +1,4 @@
-const { put, head } = require("@vercel/blob");
+const { put, list } = require("@vercel/blob");
 
 const BLOB_FILE = "wordle-scores.json";
 
@@ -11,12 +11,28 @@ const defaultData = {
 // Get scores from blob storage
 async function getScoresFromBlob() {
   try {
-    const response = await fetch(`https://${process.env.BLOB_READ_WRITE_TOKEN?.split('_')[1]}.blob.vercel-storage.com/${BLOB_FILE}`);
-    if (response.ok) {
-      return await response.json();
+    // Check if blob storage is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.log("Blob storage not configured, using defaults");
+      return defaultData;
     }
+
+    // List all blobs to find our file
+    const { blobs } = await list();
+    const scoreBlob = blobs.find(blob => blob.pathname === BLOB_FILE);
+    
+    if (scoreBlob) {
+      const response = await fetch(scoreBlob.url);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Loaded data from blob:", data);
+        return data;
+      }
+    }
+    
+    console.log("No blob found, using defaults");
   } catch (error) {
-    console.log("No existing scores found, using defaults");
+    console.log("Error accessing blob storage:", error.message);
   }
   return defaultData;
 }
@@ -24,14 +40,22 @@ async function getScoresFromBlob() {
 // Save scores to blob storage
 async function saveScoresToBlob(data) {
   try {
-    const blob = await put(BLOB_FILE, JSON.stringify(data), {
+    // Check if blob storage is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.log("Blob storage not configured - data will not persist");
+      return { url: "local-storage-only" };
+    }
+
+    const blob = await put(BLOB_FILE, JSON.stringify(data, null, 2), {
       access: 'public',
       addRandomSuffix: false
     });
+    console.log("Saved to blob:", blob.url);
     return blob;
   } catch (error) {
     console.error("Error saving to blob:", error);
-    throw error;
+    // Don't throw error, just log it and continue
+    return { url: "save-failed", error: error.message };
   }
 }
 
@@ -87,9 +111,13 @@ module.exports = async function handler(req, res) {
       }
 
       // Get current data
+      console.log("Fetching current data from blob...");
       const currentData = await getScoresFromBlob();
+      console.log("Current data:", currentData);
+      
       const currentScore = currentData.scores[player] || 0;
       const newScore = Math.max(0, currentScore + change);
+      console.log(`Updating ${player}: ${currentScore} → ${newScore}`);
 
       // Update the score
       const updatedData = {
@@ -101,19 +129,30 @@ module.exports = async function handler(req, res) {
       };
 
       // Save to blob storage
-      await saveScoresToBlob(updatedData);
+      console.log("Saving to blob storage...");
+      const saveResult = await saveScoresToBlob(updatedData);
+      console.log("Save result:", saveResult.url);
 
       return res.status(200).json({
         success: true,
         message: `${player}'s score updated from ${currentScore} to ${newScore}`,
         scores: updatedData.scores,
         lastUpdated: updatedData.lastUpdated,
+        debug: {
+          blobUrl: saveResult.url,
+          environment: process.env.NODE_ENV
+        }
       });
     } catch (error) {
       console.error("Error updating score:", error);
       return res.status(500).json({
         success: false,
         error: "Failed to update score",
+        debug: {
+          message: error.message,
+          stack: error.stack,
+          hasBlob: !!process.env.BLOB_READ_WRITE_TOKEN
+        }
       });
     }
   }
