@@ -38,20 +38,29 @@ async function loadScores() {
   try {
     showLoadingState(true);
 
-    const response = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
-      cache: 'no-cache',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+    const response = await fetch(
+      `${CONFIG.apiUrl}/api/scores?t=${Date.now()}`,
+      {
+        cache: "no-cache",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       }
-    });
+    );
     const data = await response.json();
     console.log("📥 [LOAD] Server response:", data);
 
     if (data.success) {
-      console.log("📊 [LOAD] Before update - Current scores:", JSON.stringify(scores));
+      console.log(
+        "📊 [LOAD] Before update - Current scores:",
+        JSON.stringify(scores)
+      );
       scores = data.scores;
-      console.log("📊 [LOAD] After update - New scores:", JSON.stringify(scores));
+      console.log(
+        "📊 [LOAD] After update - New scores:",
+        JSON.stringify(scores)
+      );
 
       // Update the display
       CONFIG.players.forEach((player) => {
@@ -106,8 +115,10 @@ function saveScoresToLocalStorage() {
 
 // Update a player's score
 async function updateScore(player, change) {
-  console.log(`🎯 [UPDATE] Starting update for ${player} with change ${change}`);
-  
+  console.log(
+    `🎯 [UPDATE] Starting update for ${player} with change ${change}`
+  );
+
   // Prevent concurrent updates
   if (isUpdating) {
     console.log("⏳ [UPDATE] Already updating, blocking concurrent request");
@@ -116,11 +127,36 @@ async function updateScore(player, change) {
   }
 
   isUpdating = true;
+  
+  // Get fresh scores from server before updating to avoid stale local state
+  console.log("📥 [UPDATE] Getting fresh scores from server first...");
+  try {
+    const freshResponse = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
+      cache: 'no-cache',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+    const freshData = await freshResponse.json();
+    if (freshData.success) {
+      scores = freshData.scores; // Update local state with server state
+      console.log("📊 [UPDATE] Updated local scores with server state:", JSON.stringify(scores));
+    }
+  } catch (error) {
+    console.log("⚠️ [UPDATE] Could not get fresh scores, using local state");
+  }
+  
   const oldScore = scores[player] || 0;
   const expectedNewScore = Math.max(0, oldScore + change);
-  console.log(`📊 [UPDATE] Player: ${player}, Old: ${oldScore}, Change: ${change}, Expected: ${expectedNewScore}`);
-  console.log(`📊 [UPDATE] Current scores before API call:`, JSON.stringify(scores));
-  
+  console.log(
+    `📊 [UPDATE] Player: ${player}, Old: ${oldScore}, Change: ${change}, Expected: ${expectedNewScore}`
+  );
+  console.log(
+    `📊 [UPDATE] Current scores before API call:`,
+    JSON.stringify(scores)
+  );
+
   // Stop auto-refresh during update
   clearInterval(autoRefreshInterval);
   console.log("⏸️ [UPDATE] Auto-refresh stopped");
@@ -128,31 +164,45 @@ async function updateScore(player, change) {
   try {
     showLoadingState(true);
 
-    console.log(`📤 [UPDATE] Sending API request to update ${player} by ${change}`);
-    const response = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
-      method: "POST",
-      cache: 'no-cache',
-      headers: {
-        "Content-Type": "application/json",
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      },
-      body: JSON.stringify({
-        player,
-        change,
-      }),
-    });
+    console.log(
+      `📤 [UPDATE] Sending API request to update ${player} by ${change}`
+    );
+    const response = await fetch(
+      `${CONFIG.apiUrl}/api/scores?t=${Date.now()}`,
+      {
+        method: "POST",
+        cache: "no-cache",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+        body: JSON.stringify({
+          player,
+          change,
+        }),
+      }
+    );
 
     const data = await response.json();
     console.log(`📥 [UPDATE] API Response:`, data);
 
     if (data.success) {
-      console.log(`📊 [UPDATE] Server returned scores:`, JSON.stringify(data.scores));
-      console.log(`📊 [UPDATE] Before applying server response - local scores:`, JSON.stringify(scores));
-      
+      console.log(
+        `📊 [UPDATE] Server returned scores:`,
+        JSON.stringify(data.scores)
+      );
+      console.log(
+        `📊 [UPDATE] Before applying server response - local scores:`,
+        JSON.stringify(scores)
+      );
+
       // Update local scores with server response
       scores = data.scores;
-      console.log(`📊 [UPDATE] After applying server response - local scores:`, JSON.stringify(scores));
+      console.log(
+        `📊 [UPDATE] After applying server response - local scores:`,
+        JSON.stringify(scores)
+      );
 
       // Update ALL player displays to ensure consistency
       CONFIG.players.forEach((p) => {
@@ -196,7 +246,9 @@ async function updateScore(player, change) {
     // Fallback to local update
     scores[player] = Math.max(0, oldScore + change);
     document.getElementById(`${player}-score`).textContent = scores[player];
-    console.log(`🔌 [UPDATE] Fallback - updated ${player} locally to ${scores[player]}`);
+    console.log(
+      `🔌 [UPDATE] Fallback - updated ${player} locally to ${scores[player]}`
+    );
     updateLeaderboard();
     saveScoresToLocalStorage();
 
@@ -209,7 +261,7 @@ async function updateScore(player, change) {
     showLoadingState(false);
     isUpdating = false;
     console.log(`🔓 [UPDATE] isUpdating set to false`);
-    
+
     // Update activity timestamp - no need to restart auto-refresh
     updateActivity();
   }
@@ -252,8 +304,6 @@ function updateLeaderboard() {
 
   leaderboardList.innerHTML = html;
 }
-
-
 
 // Modal functions
 function showModal(title, message) {
@@ -358,7 +408,8 @@ function startAutoRefresh() {
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     const timeSinceActivity = Date.now() - lastActivity;
-    if (!isUpdating && timeSinceActivity > 30000) { // Only refresh if inactive for 30 seconds
+    if (!isUpdating && timeSinceActivity > 30000) {
+      // Only refresh if inactive for 30 seconds
       console.log("🔄 [REFRESH] Auto-refresh triggered (inactive for 30s)");
       loadScores();
     } else if (isUpdating) {
@@ -376,9 +427,7 @@ function updateActivity() {
 }
 
 // Add activity tracking to button clicks
-document.addEventListener('click', updateActivity);
+document.addEventListener("click", updateActivity);
 
 // Start auto-refresh initially
 startAutoRefresh();
-
-
