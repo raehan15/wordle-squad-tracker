@@ -25,6 +25,8 @@ let scores = {
 
 let isUpdating = false; // Prevent concurrent updates
 let autoRefreshInterval;
+let updateQueue = []; // Queue for pending updates
+let lastUpdateTime = 0; // Track last update time for debouncing
 
 // Initialize the app
 document.addEventListener("DOMContentLoaded", function () {
@@ -119,34 +121,58 @@ async function updateScore(player, change) {
     `🎯 [UPDATE] Starting update for ${player} with change ${change}`
   );
 
-  // Prevent concurrent updates
+  // Debounce rapid clicks (minimum 500ms between updates)
+  const now = Date.now();
+  if (now - lastUpdateTime < 500) {
+    console.log("⚡ [UPDATE] Debouncing rapid click");
+    showModal("⚡ Too Fast", "Please wait a moment between updates...");
+    return;
+  }
+  lastUpdateTime = now;
+
+  // Prevent concurrent updates - queue the request if one is in progress
   if (isUpdating) {
-    console.log("⏳ [UPDATE] Already updating, blocking concurrent request");
-    showModal("⏳ Please Wait", "Another update is in progress...");
+    console.log("⏳ [UPDATE] Already updating, queueing request");
+    updateQueue.push({ player, change });
+    showModal("⏳ Please Wait", "Update queued. Processing...");
     return;
   }
 
   isUpdating = true;
-  
+
+  // Stop auto-refresh during update to prevent interference
+  clearInterval(autoRefreshInterval);
+  console.log("⏸️ [UPDATE] Auto-refresh stopped");
+
   // Get fresh scores from server before updating to avoid stale local state
   console.log("📥 [UPDATE] Getting fresh scores from server first...");
   try {
-    const freshResponse = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
-      cache: 'no-cache',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
+    const freshResponse = await fetch(
+      `${CONFIG.apiUrl}/api/scores?t=${Date.now()}`,
+      {
+        cache: "no-cache",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       }
-    });
+    );
     const freshData = await freshResponse.json();
     if (freshData.success) {
       scores = freshData.scores; // Update local state with server state
-      console.log("📊 [UPDATE] Updated local scores with server state:", JSON.stringify(scores));
+      console.log(
+        "📊 [UPDATE] Updated local scores with server state:",
+        JSON.stringify(scores)
+      );
+      // Update display with fresh scores before making changes
+      CONFIG.players.forEach((p) => {
+        document.getElementById(`${p}-score`).textContent = scores[p] || 0;
+      });
     }
   } catch (error) {
     console.log("⚠️ [UPDATE] Could not get fresh scores, using local state");
   }
-  
+
   const oldScore = scores[player] || 0;
   const expectedNewScore = Math.max(0, oldScore + change);
   console.log(
@@ -156,10 +182,6 @@ async function updateScore(player, change) {
     `📊 [UPDATE] Current scores before API call:`,
     JSON.stringify(scores)
   );
-
-  // Stop auto-refresh during update
-  clearInterval(autoRefreshInterval);
-  console.log("⏸️ [UPDATE] Auto-refresh stopped");
 
   try {
     showLoadingState(true);
@@ -196,6 +218,19 @@ async function updateScore(player, change) {
         `📊 [UPDATE] Before applying server response - local scores:`,
         JSON.stringify(scores)
       );
+
+      // Verify the update was applied correctly
+      const serverScore = data.scores[player];
+      if (serverScore !== expectedNewScore) {
+        console.warn(
+          `⚠️ [UPDATE] Score mismatch! Expected: ${expectedNewScore}, Got: ${serverScore}`
+        );
+        // Show warning to user about potential sync issue
+        showModal(
+          "⚠️ Sync Warning", 
+          `Score updated but there may be a sync issue. Expected: ${expectedNewScore}, Got: ${serverScore}`
+        );
+      }
 
       // Update local scores with server response
       scores = data.scores;
@@ -262,8 +297,17 @@ async function updateScore(player, change) {
     isUpdating = false;
     console.log(`🔓 [UPDATE] isUpdating set to false`);
 
-    // Update activity timestamp - no need to restart auto-refresh
+    // Update activity timestamp and restart auto-refresh
     updateActivity();
+    startAutoRefresh();
+    console.log("🔄 [UPDATE] Auto-refresh restarted");
+
+    // Process any queued updates
+    if (updateQueue.length > 0) {
+      console.log(`📋 [UPDATE] Processing ${updateQueue.length} queued updates`);
+      const nextUpdate = updateQueue.shift();
+      setTimeout(() => updateScore(nextUpdate.player, nextUpdate.change), 100);
+    }
   }
 }
 
@@ -408,14 +452,25 @@ function startAutoRefresh() {
   clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     const timeSinceActivity = Date.now() - lastActivity;
-    if (!isUpdating && timeSinceActivity > 30000) {
-      // Only refresh if inactive for 30 seconds
-      console.log("🔄 [REFRESH] Auto-refresh triggered (inactive for 30s)");
+    const timeSinceLastUpdate = Date.now() - lastUpdateTime;
+    
+    // Only refresh if:
+    // 1. Not currently updating
+    // 2. Inactive for 30 seconds
+    // 3. At least 5 seconds since last update
+    // 4. No pending updates in queue
+    if (!isUpdating && 
+        timeSinceActivity > 30000 && 
+        timeSinceLastUpdate > 5000 && 
+        updateQueue.length === 0) {
+      console.log("🔄 [REFRESH] Auto-refresh triggered (safe conditions met)");
       loadScores();
-    } else if (isUpdating) {
-      console.log("⏸️ [REFRESH] Skipping auto-refresh - update in progress");
     } else {
-      console.log("⏸️ [REFRESH] Skipping auto-refresh - recent activity");
+      const reason = isUpdating ? "update in progress" :
+                   timeSinceActivity <= 30000 ? "recent activity" :
+                   timeSinceLastUpdate <= 5000 ? "recent update" :
+                   updateQueue.length > 0 ? "pending updates" : "unknown";
+      console.log(`⏸️ [REFRESH] Skipping auto-refresh - ${reason}`);
     }
   }, 60000); // Check every 60 seconds
 }

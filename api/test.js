@@ -13,12 +13,12 @@ module.exports = async function handler(req, res) {
       success: true,
       message: "API is working!",
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || "development"
+      environment: process.env.NODE_ENV || "development",
     });
   }
 
   return res.status(405).json({
     success: false,
-    error: "Method not allowed"
+    error: "Method not allowed",
   });
 };
