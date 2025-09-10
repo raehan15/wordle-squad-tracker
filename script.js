@@ -177,11 +177,6 @@ async function updateScore(player, change) {
       // Save to localStorage as backup
       saveScoresToLocalStorage();
 
-      // Force a fresh load from server to double-check consistency
-      setTimeout(() => {
-        loadScores();
-      }, 500);
-
       // Show success message
       const action = change > 0 ? "increased" : "decreased";
       const playerName = player.charAt(0).toUpperCase() + player.slice(1);
