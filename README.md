@@ -15,11 +15,13 @@ A sleek, dark-themed score tracking website for Raehan, Omar, and Mahir's Wordle
 ## 🚀 Deployment Instructions
 
 ### Prerequisites
+
 1. [Node.js](https://nodejs.org/) installed
 2. [Vercel account](https://vercel.com/) (free)
 3. [GitHub account](https://github.com/) (free)
 
 ### Step 1: Setup Vercel KV Database
+
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
 2. Click "Storage" → "Create Database" → "KV"
 3. Name it `wordle-squad-kv`
@@ -28,6 +30,7 @@ A sleek, dark-themed score tracking website for Raehan, Omar, and Mahir's Wordle
 ### Step 2: Deploy to Vercel
 
 #### Option A: Deploy via GitHub (Recommended)
+
 1. Push this code to a GitHub repository
 2. Connect your GitHub repo to Vercel
 3. Add environment variables in Vercel dashboard:
@@ -35,6 +38,7 @@ A sleek, dark-themed score tracking website for Raehan, Omar, and Mahir's Wordle
 4. Deploy! 🚀
 
 #### Option B: Deploy via Vercel CLI
+
 ```bash
 # Install Vercel CLI
 npm install -g vercel
@@ -52,16 +56,20 @@ vercel
 ```
 
 ### Step 3: Access Your Site
+
 Your site will be available at: `https://your-project-name.vercel.app`
 
 ## 🔧 Configuration
 
 ### Change Password
+
 Edit the password in two places:
+
 1. `/api/scores.js` - Line with `password !== 'wordle123'`
 2. `/script.js` - CONFIG object `password: 'wordle123'`
 
 ### Add/Remove Players
+
 Edit the `players` array in `/script.js` CONFIG object and update the HTML accordingly.
 
 ## 📱 How to Use
@@ -93,12 +101,15 @@ vercel dev
 ## 🎨 Customization
 
 ### Colors
+
 Edit `/styles.css` to change the color scheme. Current theme uses:
+
 - Background: Dark slate gradients
 - Accents: Teal and emerald
 - Cards: Semi-transparent dark blue
 
 ### Features to Add Later
+
 - Game history tracking
 - Statistics (win streaks, averages)
 - Player profiles with avatars
@@ -116,15 +127,18 @@ Edit `/styles.css` to change the color scheme. Current theme uses:
 ## 🆘 Troubleshooting
 
 ### Scores not updating?
+
 - Check if KV database is connected
 - Verify API endpoints are working
 - Check browser console for errors
 
 ### Offline mode?
+
 - Scores are cached locally
 - Will sync when connection is restored
 
 ### Password not working?
+
 - Make sure password matches in both files
 - Check browser console for API errors
 
@@ -133,4 +147,5 @@ Edit `/styles.css` to change the color scheme. Current theme uses:
 Your Wordle Squad Tracker is ready to track those epic battles! 🏆
 
 ---
+
 Made with ❤️ for Raehan, Omar & Mahir

@@ -2,7 +2,8 @@
 const CONFIG = {
   password: "wordle123", // Change this to your desired password
   players: ["raehan", "omar", "mahir"],
-  apiUrl: window.location.hostname === 'localhost' ? 'http://localhost:3000' : '',
+  apiUrl:
+    window.location.hostname === "localhost" ? "http://localhost:3000" : "",
   funFacts: [
     "The original Wordle was created by Josh Wardle for his partner!",
     "Wordle has only 2,315 possible solutions in its database!",
@@ -43,16 +44,17 @@ document.addEventListener("DOMContentLoaded", function () {
 async function loadScores() {
   try {
     showLoadingState(true);
-    
+
     const response = await fetch(`${CONFIG.apiUrl}/api/scores`);
     const data = await response.json();
 
     if (data.success) {
       scores = data.scores;
-      
+
       // Update the display
       CONFIG.players.forEach((player) => {
-        document.getElementById(`${player}-score`).textContent = scores[player] || 0;
+        document.getElementById(`${player}-score`).textContent =
+          scores[player] || 0;
       });
 
       // Update last updated time
@@ -62,13 +64,13 @@ async function loadScores() {
 
       updateLeaderboard();
     } else {
-      console.error('Failed to load scores:', data.error);
-      showModal('❌ Error', 'Failed to load scores. Using offline mode.');
+      console.error("Failed to load scores:", data.error);
+      showModal("❌ Error", "Failed to load scores. Using offline mode.");
       loadScoresFromLocalStorage(); // Fallback to localStorage
     }
   } catch (error) {
-    console.error('Network error:', error);
-    showModal('🔌 Offline Mode', 'Cannot connect to server. Using local data.');
+    console.error("Network error:", error);
+    showModal("🔌 Offline Mode", "Cannot connect to server. Using local data.");
     loadScoresFromLocalStorage(); // Fallback to localStorage
   } finally {
     showLoadingState(false);
@@ -81,15 +83,16 @@ function loadScoresFromLocalStorage() {
   if (savedScores) {
     scores = JSON.parse(savedScores);
     CONFIG.players.forEach((player) => {
-      document.getElementById(`${player}-score`).textContent = scores[player] || 0;
+      document.getElementById(`${player}-score`).textContent =
+        scores[player] || 0;
     });
   }
-  
+
   const lastUpdated = localStorage.getItem("wordleSquadLastUpdated");
   if (lastUpdated) {
     updateLastUpdatedDisplay(lastUpdated);
   }
-  
+
   updateLeaderboard();
 }
 
@@ -107,20 +110,20 @@ async function updateScore(player, change) {
   }
 
   const oldScore = scores[player] || 0;
-  
+
   try {
     showLoadingState(true);
-    
+
     const response = await fetch(`${CONFIG.apiUrl}/api/scores`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         player,
         change,
-        password: CONFIG.password
-      })
+        password: CONFIG.password,
+      }),
     });
 
     const data = await response.json();
@@ -128,7 +131,7 @@ async function updateScore(player, change) {
     if (data.success) {
       // Update local scores with server response
       scores = data.scores;
-      
+
       // Update display with animation
       const scoreElement = document.getElementById(`${player}-score`);
       scoreElement.textContent = scores[player];
@@ -141,7 +144,7 @@ async function updateScore(player, change) {
 
       // Update leaderboard
       updateLeaderboard();
-      
+
       // Update last updated time
       updateLastUpdatedDisplay(data.lastUpdated);
 
@@ -151,22 +154,26 @@ async function updateScore(player, change) {
       // Show success message
       const action = change > 0 ? "increased" : "decreased";
       const playerName = player.charAt(0).toUpperCase() + player.slice(1);
-      showModal("✨ Score Updated!", data.message || `${playerName}'s score ${action}!`);
-
+      showModal(
+        "✨ Score Updated!",
+        data.message || `${playerName}'s score ${action}!`
+      );
     } else {
       showModal("❌ Update Failed", data.error || "Failed to update score");
     }
-    
   } catch (error) {
-    console.error('Network error:', error);
-    
+    console.error("Network error:", error);
+
     // Fallback to local update
     scores[player] = Math.max(0, oldScore + change);
     document.getElementById(`${player}-score`).textContent = scores[player];
     updateLeaderboard();
     saveScoresToLocalStorage();
-    
-    showModal("🔌 Offline Update", "Score updated locally. Changes will sync when online.");
+
+    showModal(
+      "🔌 Offline Update",
+      "Score updated locally. Changes will sync when online."
+    );
   } finally {
     showLoadingState(false);
   }
@@ -235,15 +242,15 @@ async function unlockControls() {
 
   try {
     showLoadingState(true);
-    
+
     const response = await fetch(`${CONFIG.apiUrl}/api/auth`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        password: enteredPassword
-      })
+        password: enteredPassword,
+      }),
     });
 
     const data = await response.json();
@@ -278,7 +285,6 @@ async function unlockControls() {
         document.body.style.background =
           "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)";
       }, 2000);
-
     } else {
       // Wrong password
       passwordInput.style.borderColor = "#ef4444";
@@ -289,12 +295,14 @@ async function unlockControls() {
         passwordInput.style.animation = "";
       }, 500);
 
-      showModal("❌ Wrong Password", data.error || "Please check your password and try again.");
+      showModal(
+        "❌ Wrong Password",
+        data.error || "Please check your password and try again."
+      );
     }
-    
   } catch (error) {
-    console.error('Network error:', error);
-    
+    console.error("Network error:", error);
+
     // Fallback to local password check
     if (enteredPassword === CONFIG.password) {
       isUnlocked = true;
@@ -306,7 +314,10 @@ async function unlockControls() {
       showModal("🔓 Unlocked (Offline)", "Controls unlocked in offline mode.");
       startAutoLockTimer();
     } else {
-      showModal("❌ Wrong Password", "Please check your password and try again.");
+      showModal(
+        "❌ Wrong Password",
+        "Please check your password and try again."
+      );
     }
   } finally {
     showLoadingState(false);
@@ -377,21 +388,21 @@ function updateLastUpdatedDisplay(timestamp) {
 
 // Show/hide loading state
 function showLoadingState(isLoading) {
-  const buttons = document.querySelectorAll('.btn');
-  buttons.forEach(btn => {
+  const buttons = document.querySelectorAll(".btn");
+  buttons.forEach((btn) => {
     if (isLoading) {
-      btn.style.opacity = '0.6';
-      btn.style.pointerEvents = 'none';
+      btn.style.opacity = "0.6";
+      btn.style.pointerEvents = "none";
     } else {
-      btn.style.opacity = '';
-      btn.style.pointerEvents = '';
+      btn.style.opacity = "";
+      btn.style.pointerEvents = "";
     }
   });
-  
+
   if (isLoading) {
-    document.body.style.cursor = 'wait';
+    document.body.style.cursor = "wait";
   } else {
-    document.body.style.cursor = '';
+    document.body.style.cursor = "";
   }
 }
 
@@ -442,7 +453,8 @@ setInterval(displayRandomFunFact, 30000);
 
 // Refresh scores every 30 seconds to stay in sync
 setInterval(() => {
-  if (!isUnlocked) { // Only refresh when not actively editing
+  if (!isUnlocked) {
+    // Only refresh when not actively editing
     loadScores();
   }
 }, 30000);
