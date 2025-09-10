@@ -24,6 +24,8 @@ let scores = {
 };
 
 let isUnlocked = false;
+let isUpdating = false; // Prevent concurrent updates
+let autoRefreshInterval;
 
 // Initialize the app
 document.addEventListener("DOMContentLoaded", function () {
@@ -45,7 +47,13 @@ async function loadScores() {
   try {
     showLoadingState(true);
 
-    const response = await fetch(`${CONFIG.apiUrl}/api/scores`);
+    const response = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
+      cache: 'no-cache',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
     const data = await response.json();
 
     if (data.success) {
@@ -109,15 +117,28 @@ async function updateScore(player, change) {
     return;
   }
 
+  // Prevent concurrent updates
+  if (isUpdating) {
+    showModal("⏳ Please Wait", "Another update is in progress...");
+    return;
+  }
+
+  isUpdating = true;
   const oldScore = scores[player] || 0;
+  
+  // Stop auto-refresh during update
+  clearInterval(autoRefreshInterval);
 
   try {
     showLoadingState(true);
 
-    const response = await fetch(`${CONFIG.apiUrl}/api/scores`, {
+    const response = await fetch(`${CONFIG.apiUrl}/api/scores?t=${Date.now()}`, {
       method: "POST",
+      cache: 'no-cache',
       headers: {
         "Content-Type": "application/json",
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
       },
       body: JSON.stringify({
         player,
@@ -176,6 +197,12 @@ async function updateScore(player, change) {
     );
   } finally {
     showLoadingState(false);
+    isUpdating = false;
+    
+    // Restart auto-refresh after a delay
+    setTimeout(() => {
+      startAutoRefresh();
+    }, 5000); // Wait 5 seconds before resuming auto-refresh
   }
 
   // Auto-lock after 30 seconds of inactivity
@@ -243,10 +270,13 @@ async function unlockControls() {
   try {
     showLoadingState(true);
 
-    const response = await fetch(`${CONFIG.apiUrl}/api/auth`, {
+    const response = await fetch(`${CONFIG.apiUrl}/api/auth?t=${Date.now()}`, {
       method: "POST",
+      cache: 'no-cache',
       headers: {
         "Content-Type": "application/json",
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
       },
       body: JSON.stringify({
         password: enteredPassword,
@@ -451,13 +481,18 @@ document.head.appendChild(style);
 // Update fun fact every 30 seconds
 setInterval(displayRandomFunFact, 30000);
 
-// Refresh scores every 30 seconds to stay in sync
-setInterval(() => {
-  if (!isUnlocked) {
-    // Only refresh when not actively editing
-    loadScores();
-  }
-}, 30000);
+// Auto-refresh management
+function startAutoRefresh() {
+  clearInterval(autoRefreshInterval);
+  autoRefreshInterval = setInterval(() => {
+    if (!isUnlocked && !isUpdating) { // Only refresh when not actively editing or updating
+      loadScores();
+    }
+  }, 30000);
+}
+
+// Start auto-refresh initially
+startAutoRefresh();
 
 // Reset auto-lock timer on any user interaction
 document.addEventListener("click", resetAutoLockTimer);
