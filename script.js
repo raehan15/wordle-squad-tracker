@@ -1,7 +1,7 @@
 // Configuration
 const CONFIG = {
   password: "wordle123", // Change this to your desired password
-  players: ["raehan", "omar", "mahir"],
+  players: ["raehan", "omar", "mahir", "hadi", "fawaz"],
   apiUrl:
     window.location.hostname === "localhost" ? "http://localhost:3000" : "",
   funFacts: [
@@ -21,6 +21,8 @@ let scores = {
   raehan: 0,
   omar: 0,
   mahir: 0,
+  hadi: 0,
+  fawaz: 0,
 };
 
 // Fixed: Properly declare all variables

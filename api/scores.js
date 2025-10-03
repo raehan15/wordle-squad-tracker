@@ -4,7 +4,7 @@ const BLOB_FILE = "wordle-scores.json";
 
 // Default scores data
 const defaultData = {
-  scores: { raehan: 0, omar: 0, mahir: 0 },
+  scores: { raehan: 0, omar: 0, mahir: 0, hadi: 0, fawaz: 0 },
   lastUpdated: new Date().toISOString(),
 };
 
@@ -158,7 +158,7 @@ module.exports = async function handler(req, res) {
       );
 
       // Validate input
-      const validPlayers = ["raehan", "omar", "mahir"];
+      const validPlayers = ["raehan", "omar", "mahir", "hadi", "fawaz"];
       if (!validPlayers.includes(player)) {
         console.log(`❌ [API] Invalid player: ${player}`);
         return res.status(400).json({
